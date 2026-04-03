@@ -1,11 +1,12 @@
-"""가중 선형 예측 모델 (Phase 1 MVP)
+"""가중 선형 예측 모델 (Phase 2)
 
-기획서 기반 가중치:
-  말 기본 승률(0.15) + 거리적성(0.12) + 주로적성(0.08) +
-  폼지수(0.10) + 클래스이동(0.08) + 게이트(0.05) +
-  기수승률(0.10) + 기수트랙특화(0.07) +
-  조교사시너지(0.10) + 말-기수시너지(0.10) +
-  휴식기간(0.05)
+기획서 기반 가중치 + Phase 2 신규 요인:
+  말 기본 승률(0.10) + 거리적성(0.10) + 주로적성(0.08) +
+  폼지수(0.08) + 클래스이동(0.06) + 게이트(0.04) +
+  기수승률(0.08) + 기수트랙특화(0.05) + 기수피로도(0.04) +
+  조교사시너지(0.08) + 말-기수시너지(0.08) +
+  휴식기간(0.04) + 각질매칭(0.07) + 마체중변동(0.04) +
+  등급꼼수(0.06)
 
 각 요인은 0~100 범위로 정규화하여 종합점수를 산출한다.
 """
@@ -25,24 +26,36 @@ from app.models.race_entry import RaceEntry
 from app.models.race_timing import RaceTiming
 from app.models.prediction import Prediction
 from app.services.synergy import calculate_synergy
+from app.services.horse_factors import (
+    calc_surface_aptitude,
+    calc_class_movement,
+    calc_running_style_matching,
+    calc_horse_weight_factor,
+)
+from app.services.jockey_factors import calc_jockey_fatigue, calc_apprentice_bonus
+from app.services.class_trick_detector import calc_class_trick_score
 
 logger = logging.getLogger(__name__)
 
-MODEL_VERSION = "weighted_linear_v1"
+MODEL_VERSION = "weighted_linear_v2"
 
-# 가중치 (기획서 기반)
+# 가중치 (Phase 2 — 20개 요인, 합계 1.00)
 WEIGHTS = {
-    "horse_win_rate": 0.15,
-    "distance_aptitude": 0.12,
+    "horse_win_rate": 0.10,
+    "distance_aptitude": 0.10,
     "surface_aptitude": 0.08,
-    "form_index": 0.10,
-    "class_movement": 0.08,
-    "gate_position": 0.05,
-    "jockey_win_rate": 0.10,
-    "jockey_track_spec": 0.07,
-    "trainer_synergy": 0.10,
-    "horse_jockey_synergy": 0.10,
-    "rest_period": 0.05,
+    "form_index": 0.08,
+    "class_movement": 0.06,
+    "gate_position": 0.04,
+    "jockey_win_rate": 0.08,
+    "jockey_track_spec": 0.05,
+    "jockey_fatigue": 0.04,
+    "trainer_synergy": 0.08,
+    "horse_jockey_synergy": 0.08,
+    "rest_period": 0.04,
+    "running_style_match": 0.07,
+    "horse_weight_factor": 0.04,
+    "class_trick": 0.06,
 }
 
 
@@ -57,9 +70,13 @@ class PredictionFactors:
     gate_position: float = 0.0
     jockey_win_rate: float = 0.0
     jockey_track_spec: float = 0.0
+    jockey_fatigue: float = 0.0
     trainer_synergy: float = 0.0
     horse_jockey_synergy: float = 0.0
     rest_period: float = 0.0
+    running_style_match: float = 0.0
+    horse_weight_factor: float = 0.0
+    class_trick: float = 0.0
 
 
 async def _calc_horse_win_rate(session: AsyncSession, horse_id: int) -> float:
@@ -236,9 +253,25 @@ async def predict_entry(
         factors.trainer_synergy = min(synergy.best_record_trainer_rate, 100.0)
         factors.horse_jockey_synergy = min(synergy.horse_jockey_synergy_rate, 100.0)
 
-    # 주로적성 / 클래스이동은 추가 데이터 필요 → 중간값
-    factors.surface_aptitude = 50.0
-    factors.class_movement = 50.0
+    # Phase 2 신규 요인
+    factors.surface_aptitude = await calc_surface_aptitude(
+        session, entry.horse_id, race.surface, race.moisture
+    )
+    factors.class_movement = await calc_class_movement(
+        session, entry.horse_id, race.race_level
+    )
+    factors.running_style_match = await calc_running_style_matching(
+        session, entry.horse_id, entry.jockey_id, race.distance
+    )
+    factors.horse_weight_factor = await calc_horse_weight_factor(
+        session, entry.horse_id
+    )
+    factors.class_trick = await calc_class_trick_score(
+        session, entry.horse_id
+    )
+    factors.jockey_fatigue = await calc_jockey_fatigue(
+        session, entry.jockey_id, race.race_date, race.race_number, race.track_id
+    )
 
     # 종합 점수
     total = sum(

@@ -1,4 +1,4 @@
-"""분석 API - 각질 분류 등"""
+"""분석 API - 각질 분류, 등급 꼼수, 종합 분석"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.services.running_style import (
     analyze_race_running_styles,
     RunningStyleAnalysis,
 )
+from app.services.class_trick_detector import detect_class_trick
 
 router = APIRouter()
 
@@ -53,3 +54,12 @@ async def get_race_running_styles(
         }
         for horse_id, a in analyses.items()
     ]
+
+
+@router.get("/horse/{horse_id}/class-trick")
+async def get_class_trick_analysis(
+    horse_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """등급 꼼수 감지 분석"""
+    return await detect_class_trick(db, horse_id)

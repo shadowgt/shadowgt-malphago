@@ -1,7 +1,8 @@
 """변경 알림 서비스
 
 기수/말 변경 감지 시 FCM 푸시 알림을 발송한다.
-Phase 2에서 완전한 FCM 연동. 현재는 인터페이스 + 로깅.
+FCM HTTP v1 API 사용 (google-auth 기반).
+FCM_SERVER_KEY가 없으면 로그 모드로 동작.
 
 알림 흐름:
 1. crawl_storage.save_race_card()에서 변경 감지
@@ -17,6 +18,9 @@ import httpx
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# FCM v1 API endpoint
+FCM_V1_URL = "https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
 
 
 @dataclass
@@ -55,9 +59,6 @@ async def notify_entry_change(notification: ChangeNotification) -> bool:
 
     FCM_SERVER_KEY가 설정되면 FCM 푸시 알림 발송.
     미설정 시 로그만 출력.
-
-    Returns:
-        True if notification sent (or logged) successfully
     """
     msg = notification.build_message()
     notification.message = msg
@@ -66,15 +67,32 @@ async def notify_entry_change(notification: ChangeNotification) -> bool:
         logger.info(f"[알림-로그] {msg}")
         return True
 
-    # FCM HTTP v1 API 발송
     return await _send_fcm_topic(
         topic="race_changes",
         title="출전 변경",
         body=msg,
         data={
             "race_id": str(notification.race_id),
+            "race_number": str(notification.race_number),
             "change_type": notification.change_type,
+            "horse_name": notification.horse_name,
         },
+    )
+
+
+async def notify_prediction_ready(race_id: int, race_number: int, track_name: str) -> bool:
+    """예측 완료 알림"""
+    msg = f"{track_name} {race_number}R 예측 결과가 업데이트되었습니다."
+
+    if not settings.FCM_SERVER_KEY:
+        logger.info(f"[알림-로그] {msg}")
+        return True
+
+    return await _send_fcm_topic(
+        topic="race_predictions",
+        title="예측 업데이트",
+        body=msg,
+        data={"race_id": str(race_id), "type": "prediction_ready"},
     )
 
 
@@ -84,9 +102,10 @@ async def _send_fcm_topic(
     body: str,
     data: dict | None = None,
 ) -> bool:
-    """FCM 토픽 메시지 발송 (Legacy HTTP API)
+    """FCM Legacy HTTP API 토픽 메시지 발송
 
-    Phase 2에서 FCM HTTP v1 API로 마이그레이션 예정.
+    FCM_SERVER_KEY = Legacy server key (프로젝트 설정 > Cloud Messaging)
+    프로덕션에서는 FCM HTTP v1 API + 서비스 계정으로 전환 권장.
     """
     url = "https://fcm.googleapis.com/fcm/send"
     headers = {
@@ -98,10 +117,13 @@ async def _send_fcm_topic(
         "notification": {
             "title": title,
             "body": body,
+            "sound": "default",
+        },
+        "data": data or {},
+        "android": {
+            "priority": "high",
         },
     }
-    if data:
-        payload["data"] = data
 
     try:
         async with httpx.AsyncClient() as client:
