@@ -13,11 +13,12 @@ from app.db.session import get_db
 from app.models.race import Race
 from app.models.race_entry import RaceEntry
 from app.models.entry_change_log import EntryChangeLog
+from app.schemas.stats import SyncDeltaSchema
 
 router = APIRouter()
 
 
-@router.get("/delta")
+@router.get("/delta", response_model=SyncDeltaSchema)
 async def get_delta(
     since: datetime = Query(..., description="마지막 동기화 시각 (ISO-8601)"),
     track: str | None = Query(None, description="경마장 코드 (S/B/J)"),
