@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.jockey import Jockey
 from app.models.race import Race
 from app.models.race_entry import RaceEntry
+from app.schemas.stats import JockeyStatsSchema
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ async def get_jockey(jockey_id: int, db: AsyncSession = Depends(get_db)):
     return jockey
 
 
-@router.get("/{jockey_id}/stats")
+@router.get("/{jockey_id}/stats", response_model=JockeyStatsSchema)
 async def get_jockey_stats(jockey_id: int, db: AsyncSession = Depends(get_db)):
     """기수 상세 통계: 전적, 트랙별/거리별 승률, 최근 폼"""
     jockey = await db.get(Jockey, jockey_id)

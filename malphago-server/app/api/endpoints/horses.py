@@ -7,6 +7,7 @@ from app.models.horse import Horse
 from app.models.race import Race
 from app.models.race_entry import RaceEntry
 from app.models.race_timing import RaceTiming
+from app.schemas.stats import HorseStatsSchema
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ async def get_horse(horse_id: int, db: AsyncSession = Depends(get_db)):
     return horse
 
 
-@router.get("/{horse_id}/stats")
+@router.get("/{horse_id}/stats", response_model=HorseStatsSchema)
 async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
     """말 상세 통계: 전적, 거리별 성적, 최근 10경주"""
     horse = await db.get(Horse, horse_id)
