@@ -41,4 +41,17 @@ interface MalPhaGoApi {
 
     @GET("synergy/race/{raceId}")
     suspend fun getRaceSynergies(@Path("raceId") raceId: Int): List<SynergyDto>
+
+    @GET("notifications/changes")
+    suspend fun getRecentChanges(
+        @Query("track") track: String? = null,
+        @Query("date") date: String? = null,
+        @Query("limit") limit: Int = 50,
+    ): List<EntryChangeDto>
+
+    @GET("analysis/horse/{horseId}/running-style")
+    suspend fun getHorseRunningStyle(
+        @Path("horseId") horseId: Int,
+        @Query("recent_n") recentN: Int = 10,
+    ): RunningStyleDto
 }

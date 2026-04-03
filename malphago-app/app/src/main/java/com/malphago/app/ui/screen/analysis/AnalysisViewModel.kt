@@ -3,8 +3,10 @@ package com.malphago.app.ui.screen.analysis
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.malphago.app.data.remote.api.MalPhaGoApi
+import com.malphago.app.data.remote.dto.EntryChangeDto
 import com.malphago.app.data.remote.dto.HorseStatsDto
 import com.malphago.app.data.remote.dto.JockeyStatsDto
+import com.malphago.app.data.remote.dto.RunningStyleDto
 import com.malphago.app.data.remote.dto.SynergyDto
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +19,8 @@ data class AnalysisUiState(
     val horseStats: HorseStatsDto? = null,
     val jockeyStats: JockeyStatsDto? = null,
     val synergies: List<SynergyDto> = emptyList(),
+    val runningStyle: RunningStyleDto? = null,
+    val recentChanges: List<EntryChangeDto> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -72,6 +76,42 @@ class AnalysisViewModel @Inject constructor(
                 val synergies = api.getRaceSynergies(raceId)
                 _uiState.value = _uiState.value.copy(
                     synergies = synergies,
+                    isLoading = false,
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message,
+                )
+            }
+        }
+    }
+
+    fun loadRunningStyle(horseId: Int) {
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            try {
+                val style = api.getHorseRunningStyle(horseId)
+                _uiState.value = _uiState.value.copy(
+                    runningStyle = style,
+                    isLoading = false,
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message,
+                )
+            }
+        }
+    }
+
+    fun loadRecentChanges(track: String? = null) {
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            try {
+                val changes = api.getRecentChanges(track = track)
+                _uiState.value = _uiState.value.copy(
+                    recentChanges = changes,
                     isLoading = false,
                 )
             } catch (e: Exception) {
