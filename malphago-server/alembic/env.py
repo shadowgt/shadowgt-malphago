@@ -12,6 +12,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Override sqlalchemy.url from environment variable if available
+import os
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
+
 # Import all models so Alembic can detect them
 from app.db.base import Base
 from app.models.track import Track
