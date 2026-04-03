@@ -713,6 +713,178 @@ async def crawl_trainer_detail(
         return None
 
 
+# ──────────────────────── 경주결과 상세 (Result Detail) ────────────────────────
+
+@dataclass
+class RaceResultDetail:
+    """검빗 경주결과 상세"""
+    race_date: str = ""
+    loc: str = ""
+    race_no: int = 0
+    weather: str = ""
+    track_condition: str = ""
+    moisture_pct: str = ""
+    grade: str = ""
+    distance: int = 0
+    prize_1st: str = ""
+    # 출주마별 결과
+    entries: list[dict] = field(default_factory=list)
+    # {ranking, horse_number, horse_name, margin, horse_weight,
+    #  odds_win, odds_place, s1f, corner_1-4, g3f, g1f, record}
+
+
+async def crawl_result_detail(
+    page: Page, loc: str, race_date: str, race_no: int
+) -> RaceResultDetail | None:
+    """경주결과 상세 페이지 크롤링 — 구간기록 + 배당 + 코너순위"""
+    url = (
+        f"{GUMBIT_BASE}/statv40/result_detail.html"
+        f"?loc={loc}&racedate={race_date}&race={race_no}"
+    )
+    try:
+        await page.goto(url, timeout=60000)
+        await page.wait_for_load_state("domcontentloaded")
+        await asyncio.sleep(1)
+
+        result = RaceResultDetail(race_date=race_date, loc=loc, race_no=race_no)
+
+        body_text = await page.inner_text("body")
+
+        # 경주 정보 추출
+        weather_match = re.search(r"날씨\s*[:\s]*(\S+)", body_text)
+        if weather_match:
+            result.weather = weather_match.group(1)
+        moisture_match = re.search(r"함수율\s*[:\s]*([\d.]+)", body_text)
+        if moisture_match:
+            result.moisture_pct = moisture_match.group(1)
+        dist_match = re.search(r"(\d{3,4})\s*[mM]", body_text)
+        if dist_match:
+            result.distance = int(dist_match.group(1))
+
+        # 결과 테이블 파싱
+        tables = await page.query_selector_all("table")
+        for table in tables:
+            rows = await table.query_selector_all("tr")
+            if len(rows) < 3:
+                continue
+            header_text = await rows[0].inner_text() if rows else ""
+            if "순위" not in header_text and "착순" not in header_text:
+                continue
+
+            for row in rows[1:]:
+                tds = await row.query_selector_all("td")
+                if len(tds) < 6:
+                    continue
+                texts = [await td.inner_text() for td in tds]
+
+                entry = {
+                    "ranking": _safe_int(texts[0]),
+                    "horse_number": _safe_int(texts[1]),
+                    "horse_name": texts[2].strip() if len(texts) > 2 else "",
+                    "margin": texts[3].strip() if len(texts) > 3 else "",
+                    "horse_weight": _safe_int(texts[4]) if len(texts) > 4 else None,
+                    "odds_win": _safe_float(texts[5]) if len(texts) > 5 else None,
+                    "odds_place": _safe_float(texts[6]) if len(texts) > 6 else None,
+                }
+
+                # 구간기록 (테이블에 있을 경우)
+                if len(texts) > 10:
+                    entry["s1f"] = _safe_float(texts[7])
+                    entry["g3f"] = _safe_float(texts[8])
+                    entry["g1f"] = _safe_float(texts[9])
+                    entry["record"] = texts[10].strip()
+
+                result.entries.append(entry)
+            break
+
+        logger.info(f"Result detail: {loc} {race_date} {race_no}R — {len(result.entries)} entries")
+        return result
+    except Exception as e:
+        logger.error(f"Error crawling result detail {loc} {race_date} {race_no}R: {e}")
+        return None
+
+
+# ──────────────────────── 기수 심층 프로필 (Deep Jockey Profile) ────────────────────
+
+@dataclass
+class JockeyDeepProfile:
+    """기수 심층 프로필 — 거리별 적성, 이변율, 조교사별 성적"""
+    name: str = ""
+    loc: str = ""
+    double_win_rate: float | None = None    # 복승율
+    avg_payout: str = ""                    # 평균배당
+    upset_rate: float | None = None         # 인기마 탈락율
+    # 거리별 성적
+    distance_stats: dict = field(default_factory=dict)
+    # {1000: {starts, wins, rate}, 1200: {...}, ...}
+    # 조교사별 성적
+    trainer_records: list[dict] = field(default_factory=list)
+    # {trainer_name, starts, wins, rate}
+
+
+async def crawl_jockey_deep_profile(
+    page: Page, jockey_name: str, loc: str = "S"
+) -> JockeyDeepProfile | None:
+    """기수 심층 프로필 크롤링 — 거리별/조교사별 분석"""
+    import urllib.parse
+    encoded_name = urllib.parse.quote(jockey_name)
+    url = (
+        f"{GUMBIT_BASE}/deep_v40/statv40/jockey/per_jockey.html"
+        f"?loc={loc}&jockey={encoded_name}&type=dwin&addtype="
+    )
+    try:
+        await page.goto(url, timeout=60000)
+        await page.wait_for_load_state("domcontentloaded")
+        await asyncio.sleep(1)
+
+        profile = JockeyDeepProfile(name=jockey_name, loc=loc)
+
+        body_text = await page.inner_text("body")
+
+        # 복승율
+        dwr_match = re.search(r"복승율\s*[:\s]*([\d.]+)", body_text)
+        if dwr_match:
+            profile.double_win_rate = _safe_float(dwr_match.group(1))
+
+        # 평균배당
+        payout_match = re.search(r"평균배당\s*[:\s]*([\d,.]+)", body_text)
+        if payout_match:
+            profile.avg_payout = payout_match.group(1)
+
+        # 인기마 탈락율
+        upset_match = re.search(r"탈락율\s*[:\s]*([\d.]+)", body_text)
+        if upset_match:
+            profile.upset_rate = _safe_float(upset_match.group(1))
+
+        # 거리별 성적 파싱
+        tables = await page.query_selector_all("table")
+        for table in tables:
+            table_text = await table.inner_text()
+            if "거리" not in table_text or "1000" not in table_text:
+                continue
+            rows = await table.query_selector_all("tr")
+            for row in rows[1:]:
+                tds = await row.query_selector_all("td")
+                if len(tds) < 3:
+                    continue
+                texts = [await td.inner_text() for td in tds]
+                dist_match = re.search(r"(\d{3,4})", texts[0])
+                if dist_match:
+                    dist = int(dist_match.group(1))
+                    profile.distance_stats[dist] = {
+                        "starts": _safe_int(texts[1]) if len(texts) > 1 else None,
+                        "wins": _safe_int(texts[2]) if len(texts) > 2 else None,
+                        "rate": _safe_float(texts[3]) if len(texts) > 3 else None,
+                    }
+            break
+
+        logger.info(f"Jockey deep: {jockey_name} ({loc}) — {len(profile.distance_stats)} distances")
+        return profile
+    except Exception as e:
+        logger.error(f"Error crawling jockey deep profile {jockey_name}: {e}")
+        return None
+
+
 # ──────────────────────── 통합 크롤링 함수 ────────────────────────
 
 async def crawl_race_analysis(

@@ -21,6 +21,11 @@ pydantic-settings==2.7.1
 httpx==0.28.1
 python-dotenv==1.0.1
 
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+aiosqlite==0.20.0
+
 # ML (Phase 3)
 # lightgbm==4.5.0
 # scikit-learn==1.6.0
