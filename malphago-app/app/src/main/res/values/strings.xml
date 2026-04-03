@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">말파고</string>
+    <string name="tab_raceday">경주일</string>
+    <string name="tab_analysis">분석</string>
+    <string name="tab_prediction">예측</string>
+    <string name="tab_settings">설정</string>
+</resources>
