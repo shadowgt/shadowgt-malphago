@@ -6,17 +6,34 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.malphago.app.data.remote.dto.DistanceBreakdownDto
+import com.malphago.app.data.remote.dto.HorseStatsDto
+import com.malphago.app.data.remote.dto.JockeyStatsDto
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnalysisScreen(modifier: Modifier = Modifier) {
+fun AnalysisScreen(
+    modifier: Modifier = Modifier,
+    viewModel: AnalysisViewModel = hiltViewModel(),
+) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("말 분석", "기수 분석", "시너지 분석")
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = modifier.fillMaxSize()) {
-        // 탭
         TabRow(selectedTabIndex = selectedTab) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -28,140 +45,322 @@ fun AnalysisScreen(modifier: Modifier = Modifier) {
         }
 
         when (selectedTab) {
-            0 -> HorseAnalysisTab()
-            1 -> JockeyAnalysisTab()
+            0 -> HorseAnalysisTab(
+                stats = uiState.horseStats,
+                isLoading = uiState.isLoading,
+                onSearch = { viewModel.loadHorseStats(it) },
+            )
+            1 -> JockeyAnalysisTab(
+                stats = uiState.jockeyStats,
+                isLoading = uiState.isLoading,
+                onSearch = { viewModel.loadJockeyStats(it) },
+            )
             2 -> SynergyAnalysisTab()
         }
     }
 }
 
 @Composable
-private fun HorseAnalysisTab() {
-    val mockHorses = listOf(
-        Triple("바람의검", "82-15-12-10", 18.3),
-        Triple("천둥번개", "65-8-9-7", 12.3),
-        Triple("금빛질주", "45-10-8-5", 22.2),
-        Triple("하늘바람", "120-20-15-18", 16.7),
-    )
+private fun HorseAnalysisTab(
+    stats: HorseStatsDto?,
+    isLoading: Boolean,
+    onSearch: (Int) -> Unit,
+) {
+    var searchId by remember { mutableStateOf("") }
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                placeholder = { Text("말 이름 검색") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = searchId,
+                    onValueChange = { searchId = it },
+                    placeholder = { Text("말 ID 입력") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { searchId.toIntOrNull()?.let(onSearch) }) {
+                    Text("검색")
+                }
+            }
         }
 
-        items(mockHorses.size) { index ->
-            val (name, record, winRate) = mockHorses[index]
-            StatCard(
-                title = name,
-                subtitle = "전적: $record",
-                value = "${winRate}%",
-                valueLabel = "승률",
-            )
+        if (isLoading) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        stats?.let { horse ->
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = horse.name ?: "Unknown",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            horse.origin?.let { InfoChip("산지: $it") }
+                            horse.gender?.let { InfoChip("성별: $it") }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            StatItem("전적", horse.totalRecord ?: "-")
+                            StatItem("승률", "${horse.winRate ?: 0}%")
+                            StatItem("입상률", "${horse.top3Rate ?: 0}%")
+                        }
+                    }
+                }
+            }
+
+            // 거리별 성적 차트
+            horse.distanceBreakdown?.let { breakdown ->
+                if (breakdown.isNotEmpty()) {
+                    item {
+                        Text(
+                            "거리별 성적",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    item {
+                        DistanceBarChart(breakdown)
+                    }
+                }
+            }
+
+            // 최근 경주
+            horse.recentRaces?.let { races ->
+                if (races.isNotEmpty()) {
+                    item {
+                        Text(
+                            "최근 경주",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    items(races.size) { i ->
+                        val race = races[i]
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(race.raceDate ?: "-", style = MaterialTheme.typography.bodyMedium)
+                                Text("${race.distance ?: "-"}m", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "${race.ranking ?: "-"}착",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = when (race.ranking) {
+                                        1 -> Color(0xFFFFD700)
+                                        2 -> Color(0xFFC0C0C0)
+                                        3 -> Color(0xFFCD7F32)
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    },
+                                )
+                                Text("${race.oddsWin ?: "-"}배", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun JockeyAnalysisTab() {
-    val mockJockeys = listOf(
-        Triple("문세영", "1500-250-200-180", 16.7),
-        Triple("김성현", "1200-180-160-140", 15.0),
-        Triple("이찬호", "900-120-110-95", 13.3),
-        Triple("김동수", "800-100-90-80", 12.5),
-    )
+private fun DistanceBarChart(breakdown: List<DistanceBreakdownDto>) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(breakdown) {
+        modelProducer.runTransaction {
+            columnSeries {
+                series(breakdown.map { it.winRate ?: 0.0 })
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberColumnCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(200.dp),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                breakdown.forEach { d ->
+                    Text(
+                        "${d.distance ?: "?"}m",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun JockeyAnalysisTab(
+    stats: JockeyStatsDto?,
+    isLoading: Boolean,
+    onSearch: (Int) -> Unit,
+) {
+    var searchId by remember { mutableStateOf("") }
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                placeholder = { Text("기수 이름 검색") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = searchId,
+                    onValueChange = { searchId = it },
+                    placeholder = { Text("기수 ID 입력") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { searchId.toIntOrNull()?.let(onSearch) }) {
+                    Text("검색")
+                }
+            }
         }
 
-        items(mockJockeys.size) { index ->
-            val (name, record, winRate) = mockJockeys[index]
-            StatCard(
-                title = name,
-                subtitle = "전적: $record",
-                value = "${winRate}%",
-                valueLabel = "승률",
-            )
+        if (isLoading) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        stats?.let { jockey ->
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = jockey.name ?: "Unknown",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            StatItem("전적", jockey.totalRecord ?: "-")
+                            StatItem("승률", "${jockey.winRate ?: 0}%")
+                            StatItem("입상률", "${jockey.top3Rate ?: 0}%")
+                            StatItem("최근폼", "${jockey.recent30Form ?: 0}%")
+                        }
+                    }
+                }
+            }
+
+            // 거리별 성적 차트
+            jockey.distanceBreakdown?.let { breakdown ->
+                if (breakdown.isNotEmpty()) {
+                    item {
+                        Text(
+                            "거리별 성적",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    item {
+                        DistanceBarChart(breakdown)
+                    }
+                }
+            }
+
+            // 트랙별 성적
+            jockey.trackBreakdown?.let { tracks ->
+                if (tracks.isNotEmpty()) {
+                    item {
+                        Text(
+                            "트랙별 성적",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    items(tracks.size) { i ->
+                        val t = tracks[i]
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("트랙 ${t.track ?: "-"}")
+                                Text("${t.runs ?: 0}전 ${t.wins ?: 0}승")
+                                Text(
+                                    "승률 ${t.winRate ?: 0}%",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun SynergyAnalysisTab() {
-    val mockSynergies = listOf(
-        SynergyItem("바람의검 + 문세영", 85.2, 72.1, 15.3),
-        SynergyItem("천둥번개 + 김성현", 78.5, 65.3, 12.8),
-        SynergyItem("금빛질주 + 이찬호", 71.0, 58.9, 18.5),
-    )
-
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        item {
-            Text(
-                "말-기수 시너지 분석",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        items(mockSynergies.size) { index ->
-            val synergy = mockSynergies[index]
-            SynergyCard(synergy)
-        }
+        Text(
+            "경주 상세에서 시너지 분석을 확인하세요.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
-private data class SynergyItem(
-    val combo: String,
-    val synergyScore: Double,
-    val trainerRate: Double,
-    val highDividendRate: Double,
-)
-
 @Composable
-private fun SynergyCard(synergy: SynergyItem) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = synergy.combo,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                StatItem("시너지", "${synergy.synergyScore}%")
-                StatItem("조교사 입상", "${synergy.trainerRate}%")
-                StatItem("이변율", "${synergy.highDividendRate}%")
-            }
-        }
+private fun InfoChip(text: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 
@@ -179,49 +378,5 @@ private fun StatItem(label: String, value: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun StatCard(
-    title: String,
-    subtitle: String,
-    value: String,
-    valueLabel: String,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = valueLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
 }
