@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     KRA_BASE_URL: str = "https://race.kra.co.kr"
     GUMBIT_BASE_URL: str = "https://www.gumvit.com"
 
+    # data.go.kr 공공데이터 API
+    DATA_GO_KR_SERVICE_KEY: str = ""  # data.go.kr 인증키 (URL 인코딩된 키)
+
     # FCM (Phase 2)
     FCM_SERVER_KEY: str = ""
 
