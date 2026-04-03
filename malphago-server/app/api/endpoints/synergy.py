@@ -3,11 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.synergy import calculate_synergy, calculate_race_synergies
+from app.schemas.prediction import SynergySchema, SynergyBriefSchema
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=SynergySchema)
 async def get_synergy(
     jockey_id: int = Query(..., alias="jockeyId"),
     trainer_id: int = Query(..., alias="trainerId"),
@@ -31,7 +32,7 @@ async def get_synergy(
     }
 
 
-@router.get("/race/{race_id}")
+@router.get("/race/{race_id}", response_model=list[SynergyBriefSchema])
 async def get_race_synergies(race_id: int, db: AsyncSession = Depends(get_db)):
     """경주 전체 출주마의 시너지 지표 일괄 조회"""
     reports = await calculate_race_synergies(db, race_id)

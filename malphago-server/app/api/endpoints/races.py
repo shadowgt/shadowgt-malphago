@@ -8,11 +8,12 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.race import Race
 from app.models.race_entry import RaceEntry
+from app.schemas.race import RaceSchema
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=list[RaceSchema])
 async def list_races(
     track: str | None = Query(None, description="경마장 코드 (S/B/J)"),
     race_date: date | None = Query(None, alias="date"),
@@ -30,7 +31,7 @@ async def list_races(
     return result.scalars().all()
 
 
-@router.get("/{race_id}")
+@router.get("/{race_id}", response_model=RaceSchema | None)
 async def get_race(race_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(Race).where(Race.id == race_id)
     result = await db.execute(stmt)

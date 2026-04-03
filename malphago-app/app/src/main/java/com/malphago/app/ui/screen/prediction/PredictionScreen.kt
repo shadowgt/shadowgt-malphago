@@ -15,17 +15,14 @@ import com.malphago.app.data.remote.dto.PredictionDto
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PredictionScreen(modifier: Modifier = Modifier) {
-    // Mock data for UI development (ViewModel 연결 전)
-    val mockPredictions = remember {
-        listOf(
-            PredictionDto(1, 78.5, 1, 82.0, null, "weighted_linear_v1", null),
-            PredictionDto(2, 72.3, 2, 68.0, null, "weighted_linear_v1", null),
-            PredictionDto(3, 68.1, 3, 55.0, null, "weighted_linear_v1", null),
-            PredictionDto(4, 65.7, 4, 45.0, null, "weighted_linear_v1", null),
-            PredictionDto(5, 61.2, 5, 40.0, null, "weighted_linear_v1", null),
-        )
-    }
+fun PredictionScreen(
+    uiState: PredictionUiState = PredictionUiState(),
+    onRunPrediction: (Int) -> Unit = {},
+    onLoadPredictions: (Int) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    var selectedRaceIndex by remember { mutableIntStateOf(0) }
+    val raceLabels = (1..10).map { "${it}R" }
 
     Column(modifier = modifier.fillMaxSize()) {
         // 헤더
@@ -43,9 +40,17 @@ fun PredictionScreen(modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.Bold,
                 )
                 FilledTonalButton(
-                    onClick = { /* Run prediction */ },
+                    onClick = { onRunPrediction(selectedRaceIndex + 1) },
+                    enabled = !uiState.isLoading,
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("예측 실행")
                 }
@@ -59,22 +64,47 @@ fun PredictionScreen(modifier: Modifier = Modifier) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("1R", "2R", "3R", "4R", "5R").forEachIndexed { index, label ->
+            raceLabels.take(5).forEachIndexed { index, label ->
                 FilterChip(
-                    selected = index == 0,
-                    onClick = { },
+                    selected = selectedRaceIndex == index,
+                    onClick = {
+                        selectedRaceIndex = index
+                        onLoadPredictions(index + 1)
+                    },
                     label = { Text(label) },
                 )
             }
         }
 
+        // 에러 표시
+        uiState.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+
         // 예측 결과 리스트
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(mockPredictions) { prediction ->
-                PredictionCard(prediction)
+        if (uiState.predictions.isEmpty() && !uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "예측 실행 버튼을 눌러주세요",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(uiState.predictions) { prediction ->
+                    PredictionCard(prediction)
+                }
             }
         }
     }
@@ -138,7 +168,7 @@ private fun PredictionCard(prediction: PredictionDto) {
             // 점수
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${prediction.totalScore}점",
+                    text = "${"%.1f".format(prediction.totalScore)}점",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = rankColor,

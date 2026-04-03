@@ -5,11 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.prediction import Prediction
 from app.services.prediction import predict_race
+from app.schemas.prediction import PredictionSchema, PredictionRunResponse
 
 router = APIRouter()
 
 
-@router.get("/race/{race_id}")
+@router.get("/race/{race_id}", response_model=list[PredictionSchema])
 async def get_race_predictions(race_id: int, db: AsyncSession = Depends(get_db)):
     """경주 예측 결과 조회"""
     stmt = (
@@ -34,11 +35,11 @@ async def get_race_predictions(race_id: int, db: AsyncSession = Depends(get_db))
     ]
 
 
-@router.post("/race/{race_id}/run")
+@router.post("/race/{race_id}/run", response_model=PredictionRunResponse)
 async def run_prediction(race_id: int, db: AsyncSession = Depends(get_db)):
     """경주 예측 실행 (즉시)"""
     results = await predict_race(db, race_id)
-    return {"race_id": race_id, "predictions": results}
+    return PredictionRunResponse(race_id=race_id, predictions=results)
 
 
 @router.post("/override")
