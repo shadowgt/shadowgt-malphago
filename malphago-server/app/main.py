@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.api.router import api_router
 from app.db.session import engine
 from app.db.base import Base
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
@@ -14,8 +15,11 @@ async def lifespan(app: FastAPI):
     # Startup: create tables (dev only, use Alembic in prod)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Start crawler scheduler
+    start_scheduler()
     yield
     # Shutdown
+    stop_scheduler()
     await engine.dispose()
 
 
