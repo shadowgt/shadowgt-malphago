@@ -12,9 +12,10 @@ from app.services.scheduler import start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables (dev only, use Alembic in prod)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup: create tables if not using Alembic (dev fallback)
+    if settings.DEBUG:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     # Start crawler scheduler
     start_scheduler()
     yield

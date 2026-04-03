@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.race import Race
 from app.models.race_entry import RaceEntry
-from app.schemas.race import RaceSchema
+from app.schemas.race import RaceSchema, RaceEntrySchema
 
 router = APIRouter()
 
@@ -38,7 +38,7 @@ async def get_race(race_id: int, db: AsyncSession = Depends(get_db)):
     return result.scalar_one_or_none()
 
 
-@router.get("/{race_id}/entries")
+@router.get("/{race_id}/entries", response_model=list[RaceEntrySchema])
 async def get_race_entries(race_id: int, db: AsyncSession = Depends(get_db)):
     stmt = (
         select(RaceEntry)

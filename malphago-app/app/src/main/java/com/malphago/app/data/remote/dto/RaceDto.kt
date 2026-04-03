@@ -15,6 +15,8 @@ data class RaceDto(
     val moisture: String?,
     @SerializedName("total_entries") val totalEntries: Int?,
     @SerializedName("prize_1st") val prize1st: Int?,
+    @SerializedName("prize_2nd") val prize2nd: Int?,
+    @SerializedName("prize_3rd") val prize3rd: Int?,
     @SerializedName("race_time") val raceTime: String?,
 )
 

@@ -18,7 +18,10 @@ async def get_jockey(jockey_id: int, db: AsyncSession = Depends(get_db)):
     jockey = result.scalar_one_or_none()
     if not jockey:
         raise HTTPException(status_code=404, detail="Jockey not found")
-    return jockey
+    return {
+        "id": jockey.id,
+        "name": jockey.name,
+    }
 
 
 @router.get("/{jockey_id}/stats", response_model=JockeyStatsSchema)
@@ -73,6 +76,27 @@ async def get_jockey_stats(jockey_id: int, db: AsyncSession = Depends(get_db)):
     recent_30 = entries[:30]
     recent_top3 = sum(1 for e in recent_30 if e.ranking and e.ranking <= 3)
 
+    distance_breakdown = [
+        {
+            "distance": str(dist),
+            "runs": s["total"],
+            "wins": s["wins"],
+            "top3": s["top3"],
+            "win_rate": round(s["wins"] / s["total"] * 100, 1) if s["total"] > 0 else 0,
+        }
+        for dist, s in sorted(distance_stats.items())
+    ]
+
+    track_breakdown = [
+        {
+            "track": str(tid),
+            "runs": s["total"],
+            "wins": s["wins"],
+            "win_rate": round(s["wins"] / s["total"] * 100, 1) if s["total"] > 0 else 0,
+        }
+        for tid, s in sorted(track_stats.items())
+    ]
+
     return {
         "jockey_id": jockey_id,
         "name": jockey.name,
@@ -80,6 +104,6 @@ async def get_jockey_stats(jockey_id: int, db: AsyncSession = Depends(get_db)):
         "win_rate": round(wins / total * 100, 1) if total > 0 else 0,
         "top3_rate": round((wins + seconds + thirds) / total * 100, 1) if total > 0 else 0,
         "recent_30_form": round(recent_top3 / len(recent_30) * 100, 1) if recent_30 else 0,
-        "distance_stats": distance_stats,
-        "track_stats": track_stats,
+        "distance_breakdown": distance_breakdown,
+        "track_breakdown": track_breakdown,
     }

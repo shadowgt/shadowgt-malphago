@@ -19,7 +19,12 @@ async def get_horse(horse_id: int, db: AsyncSession = Depends(get_db)):
     horse = result.scalar_one_or_none()
     if not horse:
         raise HTTPException(status_code=404, detail="Horse not found")
-    return horse
+    return {
+        "id": horse.id,
+        "name": horse.name,
+        "origin": horse.origin,
+        "gender": horse.gender,
+    }
 
 
 @router.get("/{horse_id}/stats", response_model=HorseStatsSchema)
@@ -72,6 +77,17 @@ async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
             "odds_win": float(entry.odds_win) if entry.odds_win else None,
         })
 
+    distance_breakdown = [
+        {
+            "distance": str(dist),
+            "runs": s["total"],
+            "wins": s["wins"],
+            "top3": s["top3"],
+            "win_rate": round(s["wins"] / s["total"] * 100, 1) if s["total"] > 0 else 0,
+        }
+        for dist, s in sorted(distance_stats.items())
+    ]
+
     return {
         "horse_id": horse_id,
         "name": horse.name,
@@ -80,6 +96,6 @@ async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
         "total_record": f"{total}-{wins}-{seconds}-{thirds}",
         "win_rate": round(wins / total * 100, 1) if total > 0 else 0,
         "top3_rate": round((wins + seconds + thirds) / total * 100, 1) if total > 0 else 0,
-        "distance_stats": distance_stats,
+        "distance_breakdown": distance_breakdown,
         "recent_races": recent,
     }

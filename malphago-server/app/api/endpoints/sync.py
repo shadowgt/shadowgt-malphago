@@ -45,7 +45,6 @@ async def get_delta(
     changes = change_result.scalars().all()
 
     return {
-        "since": since.isoformat(),
         "races": [
             {
                 "id": r.id,
@@ -59,7 +58,7 @@ async def get_delta(
             }
             for r in races
         ],
-        "changes": [
+        "change_logs": [
             {
                 "id": c.id,
                 "race_id": c.race_id,
@@ -67,7 +66,7 @@ async def get_delta(
                 "field_name": c.field_name,
                 "old_value": c.old_value,
                 "new_value": c.new_value,
-                "detected_at": c.detected_at.isoformat(),
+                "detected_at": c.detected_at.isoformat() if c.detected_at else None,
             }
             for c in changes
         ],

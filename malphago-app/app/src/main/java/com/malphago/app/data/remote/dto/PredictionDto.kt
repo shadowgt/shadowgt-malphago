@@ -22,6 +22,16 @@ data class SynergyDto(
     @SerializedName("high_dividend_record_trainer_rate") val highDividendRecordTrainerRate: Double?,
     @SerializedName("horse_jockey_synergy_rate") val horseJockeySynergyRate: Double?,
     @SerializedName("horse_jockey_total_runs") val horseJockeyTotalRuns: Int?,
+    @SerializedName("trainer_win_rate") val trainerWinRate: Double?,
+    @SerializedName("jockey_total_runs") val jockeyTotalRuns: Int?,
+)
+
+data class DistanceBreakdownDto(
+    val distance: String?,
+    val runs: Int?,
+    val wins: Int?,
+    val top3: Int?,
+    @SerializedName("win_rate") val winRate: Double?,
 )
 
 data class HorseStatsDto(
@@ -32,6 +42,7 @@ data class HorseStatsDto(
     @SerializedName("total_record") val totalRecord: String?,
     @SerializedName("win_rate") val winRate: Double?,
     @SerializedName("top3_rate") val top3Rate: Double?,
+    @SerializedName("distance_breakdown") val distanceBreakdown: List<DistanceBreakdownDto>?,
     @SerializedName("recent_races") val recentRaces: List<RecentRaceDto>?,
 )
 
@@ -44,6 +55,13 @@ data class RecentRaceDto(
     @SerializedName("odds_win") val oddsWin: Double?,
 )
 
+data class TrackBreakdownDto(
+    val track: String?,
+    val runs: Int?,
+    val wins: Int?,
+    @SerializedName("win_rate") val winRate: Double?,
+)
+
 data class JockeyStatsDto(
     @SerializedName("jockey_id") val jockeyId: Int,
     val name: String?,
@@ -51,4 +69,6 @@ data class JockeyStatsDto(
     @SerializedName("win_rate") val winRate: Double?,
     @SerializedName("top3_rate") val top3Rate: Double?,
     @SerializedName("recent_30_form") val recent30Form: Double?,
+    @SerializedName("distance_breakdown") val distanceBreakdown: List<DistanceBreakdownDto>?,
+    @SerializedName("track_breakdown") val trackBreakdown: List<TrackBreakdownDto>?,
 )
