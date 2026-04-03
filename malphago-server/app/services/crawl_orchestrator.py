@@ -15,8 +15,9 @@ APScheduler에서 호출하거나 수동 실행 가능.
 import logging
 from datetime import date, datetime, timedelta
 
+from app.core.config import settings
 from app.db.session import async_session
-from app.crawlers import kra_crawler, gumbit_crawler
+from app.crawlers import kra_crawler, kra_api, gumbit_crawler
 from app.services.crawl_storage import (
     save_race_day_results, save_race_day_cards, save_entry_changes,
 )
@@ -24,6 +25,11 @@ from app.services.crawl_storage import (
 logger = logging.getLogger(__name__)
 
 TRACKS = ["S", "B"]  # 서울, 부산 (제주는 별도 일정)
+
+
+def _use_api() -> bool:
+    """data.go.kr API 사용 가능 여부 (ServiceKey 설정 시 API 우선 사용)"""
+    return bool(settings.DATA_GO_KR_SERVICE_KEY)
 
 
 def _date_to_str(d: date) -> str:
@@ -52,6 +58,7 @@ async def crawl_and_save_race_cards(target_date: date, tracks: list[str] | None 
     """출마표 크롤링 + DB 저장
 
     수~금 10:00에 실행. 경주일 출주표를 미리 수집.
+    API 키가 설정되면 data.go.kr API 우선, 없으면 Playwright 폴백.
     """
     tracks = tracks or TRACKS
     rc_date = _date_to_str(target_date)
@@ -59,7 +66,12 @@ async def crawl_and_save_race_cards(target_date: date, tracks: list[str] | None 
     async with async_session() as session:
         for track_code in tracks:
             logger.info(f"Crawling cards: {track_code} {rc_date}")
-            cards = await kra_crawler.crawl_race_day_cards(track_code, rc_date)
+            if _use_api() and track_code == "S":
+                # 공공 API (서울 전용)
+                cards = await kra_api.fetch_race_day_cards(rc_date)
+            else:
+                # Playwright 폴백
+                cards = await kra_crawler.crawl_race_day_cards(track_code, rc_date)
             if cards:
                 saved = await save_race_day_cards(session, cards)
                 logger.info(f"Saved {saved} cards for {track_code} {rc_date}")
@@ -71,6 +83,7 @@ async def crawl_and_save_results(target_date: date, tracks: list[str] | None = N
     """경주결과 크롤링 + DB 저장
 
     금/토/일 18:00에 실행. 당일 경주 결과를 수집.
+    API 키가 설정되면 data.go.kr API 우선, 없으면 Playwright 폴백.
     """
     tracks = tracks or TRACKS
     rc_date = _date_to_str(target_date)
@@ -78,7 +91,12 @@ async def crawl_and_save_results(target_date: date, tracks: list[str] | None = N
     async with async_session() as session:
         for track_code in tracks:
             logger.info(f"Crawling results: {track_code} {rc_date}")
-            results = await kra_crawler.crawl_race_day_results(track_code, rc_date)
+            if _use_api():
+                # 공공 API (서울/부산/제주 전체 지원)
+                results = await kra_api.fetch_race_day_results(track_code, rc_date)
+            else:
+                # Playwright 폴백
+                results = await kra_crawler.crawl_race_day_results(track_code, rc_date)
             if results:
                 saved = await save_race_day_results(session, results)
                 logger.info(f"Saved {saved} results for {track_code} {rc_date}")

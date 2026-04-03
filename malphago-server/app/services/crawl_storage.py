@@ -23,6 +23,7 @@ from app.models.entry_change_log import EntryChangeLog
 from app.crawlers.kra_crawler import (
     RaceResult, RaceCard, EntryData, TimingData, EntryChange, RaceInfo,
 )
+from app.services.notification import ChangeNotification, notify_entry_change
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,17 @@ async def save_race_card(session: AsyncSession, card: RaceCard) -> Race | None:
                     f"{card.info.race_number}R #{ed.horse_number} "
                     f"{old_jockey.name if old_jockey else '?'} → {ed.jockey_name}"
                 )
+
+                # 알림 발송
+                await notify_entry_change(ChangeNotification(
+                    race_id=race.id,
+                    race_number=card.info.race_number,
+                    track_name=TRACK_CODE_MAP.get(card.info.track_code, ""),
+                    change_type="jockey_change",
+                    horse_name=ed.horse_name,
+                    old_value=old_jockey.name if old_jockey else "?",
+                    new_value=ed.jockey_name,
+                ))
 
             # 업데이트
             entry.horse_id = horse_id
