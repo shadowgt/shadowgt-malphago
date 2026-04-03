@@ -78,4 +78,7 @@ class RaceRepository @Inject constructor(
 
     suspend fun getRaceSynergies(raceId: Int): List<SynergyDto> =
         api.getRaceSynergies(raceId)
+
+    suspend fun deleteOldRaces(beforeDate: String) =
+        raceDao.deleteOldRaces(beforeDate)
 }
