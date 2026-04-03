@@ -6,8 +6,8 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://malphago:malphago@localhost:5432/malphago"
+    # Database (sqlite+aiosqlite for local dev, postgresql+asyncpg for production)
+    DATABASE_URL: str = "sqlite+aiosqlite:///./malphago_dev.db"
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["*"]

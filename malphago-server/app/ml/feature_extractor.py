@@ -25,33 +25,34 @@ logger = logging.getLogger(__name__)
 
 
 FEATURE_COLUMNS = [
-    # 15 existing prediction factors
+    # Prediction factors (0-100 range)
     "horse_win_rate",
     "distance_aptitude",
-    "surface_aptitude",
     "form_index",
     "class_movement",
     "gate_position",
     "jockey_win_rate",
-    "jockey_track_spec",
     "jockey_fatigue",
     "trainer_synergy",
     "horse_jockey_synergy",
     "rest_period",
     "running_style_match",
-    "horse_weight_factor",
     "class_trick",
-    # Raw features (additional)
-    "odds_win",
-    "odds_place",
-    "horse_weight",
-    "horse_weight_change",
+    # Raw features (available in legacy data)
     "race_interval",
     "horse_number",
     "total_entries",
-    "rating",
     "distance",
     "favor_ranking",
+    # Factors needing external data (surface/weight/odds)
+    # Uncomment when data.go.kr API data is available:
+    # "surface_aptitude",
+    # "horse_weight_factor",
+    # "odds_win",
+    # "odds_place",
+    # "horse_weight",
+    # "horse_weight_change",
+    # "rating",
 ]
 
 TARGET_COL = "is_top3"
@@ -82,7 +83,6 @@ async def extract_race_features(
             # Prediction factors (0-100)
             "horse_win_rate": factors.horse_win_rate,
             "distance_aptitude": factors.distance_aptitude,
-            "surface_aptitude": factors.surface_aptitude,
             "form_index": factors.form_index,
             "class_movement": factors.class_movement,
             "gate_position": factors.gate_position,
@@ -93,19 +93,21 @@ async def extract_race_features(
             "horse_jockey_synergy": factors.horse_jockey_synergy,
             "rest_period": factors.rest_period,
             "running_style_match": factors.running_style_match,
-            "horse_weight_factor": factors.horse_weight_factor,
             "class_trick": factors.class_trick,
             # Raw features
+            "race_interval": entry.race_interval or np.nan,
+            "horse_number": entry.horse_number or np.nan,
+            "total_entries": race.total_entries or np.nan,
+            "distance": race.distance or np.nan,
+            "favor_ranking": entry.favor_ranking or np.nan,
+            # Fields for future enrichment (data.go.kr)
+            "surface_aptitude": factors.surface_aptitude,
+            "horse_weight_factor": factors.horse_weight_factor,
             "odds_win": float(entry.odds_win) if entry.odds_win else np.nan,
             "odds_place": float(entry.odds_place) if entry.odds_place else np.nan,
             "horse_weight": entry.horse_weight or np.nan,
             "horse_weight_change": entry.horse_weight_change or np.nan,
-            "race_interval": entry.race_interval or np.nan,
-            "horse_number": entry.horse_number or np.nan,
-            "total_entries": race.total_entries or np.nan,
             "rating": entry.rating or np.nan,
-            "distance": race.distance or np.nan,
-            "favor_ranking": entry.favor_ranking or np.nan,
             # Meta (not used as features)
             "race_id": race.id,
             "entry_id": entry.id,
@@ -134,9 +136,17 @@ async def build_dataset(
     Returns:
         DataFrame with features + targets
     """
+    # ranking이 있는 entry가 존재하는 경주 = 결과가 있는 경주
+    from sqlalchemy import exists
+    has_results = exists(
+        select(RaceEntry.id).where(
+            RaceEntry.race_id == Race.id,
+            RaceEntry.ranking.isnot(None),
+        )
+    )
     races_q = (
         select(Race)
-        .where(Race.race_time.isnot(None))  # 결과가 있는 경주만
+        .where(has_results)
         .order_by(Race.race_date)
     )
     races_result = await session.execute(races_q)
