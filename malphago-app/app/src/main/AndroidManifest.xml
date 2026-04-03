@@ -30,6 +30,11 @@
             </intent-filter>
         </service>
 
+        <!-- AdMob App ID (테스트용, 프로덕션에서 실제 ID로 교체) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <!-- FCM default notification channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"

@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.jockey import Jockey
-from app.models.race import Race
 from app.models.race_entry import RaceEntry
 from app.schemas.stats import JockeyStatsSchema
 
@@ -34,6 +34,7 @@ async def get_jockey_stats(jockey_id: int, db: AsyncSession = Depends(get_db)):
     entries_q = (
         select(RaceEntry)
         .where(RaceEntry.jockey_id == jockey_id)
+        .options(selectinload(RaceEntry.race))
         .order_by(RaceEntry.id.desc())
     )
     entries_result = await db.execute(entries_q)
@@ -48,7 +49,7 @@ async def get_jockey_stats(jockey_id: int, db: AsyncSession = Depends(get_db)):
     distance_stats = {}
     track_stats = {}
     for entry in entries:
-        race = await db.get(Race, entry.race_id)
+        race = entry.race
         if not race:
             continue
         # 거리별

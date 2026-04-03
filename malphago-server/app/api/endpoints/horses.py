@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.horse import Horse
@@ -34,10 +35,11 @@ async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
     if not horse:
         raise HTTPException(status_code=404, detail="Horse not found")
 
-    # 전체 전적
+    # 전체 전적 (selectinload로 race 관계 미리 로드 → N+1 방지)
     entries_q = (
         select(RaceEntry)
         .where(RaceEntry.horse_id == horse_id)
+        .options(selectinload(RaceEntry.race))
         .order_by(RaceEntry.id.desc())
     )
     entries_result = await db.execute(entries_q)
@@ -51,7 +53,7 @@ async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
     # 거리별 성적
     distance_stats = {}
     for entry in entries:
-        race = await db.get(Race, entry.race_id)
+        race = entry.race
         if not race or not race.distance:
             continue
         dist = race.distance
@@ -66,7 +68,7 @@ async def get_horse_stats(horse_id: int, db: AsyncSession = Depends(get_db)):
     # 최근 10경주
     recent = []
     for entry in entries[:10]:
-        race = await db.get(Race, entry.race_id)
+        race = entry.race
         recent.append({
             "race_date": race.race_date.isoformat() if race else None,
             "track_code": None,

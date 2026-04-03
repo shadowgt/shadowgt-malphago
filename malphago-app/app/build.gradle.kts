@@ -89,6 +89,12 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging-ktx")
 
+    // AdMob
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+
+    // Google Play Billing
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+
     // Charts (Vico)
     implementation("com.patrykandpatrick.vico:compose-m3:2.0.1")
 

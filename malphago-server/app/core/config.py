@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # FCM (Phase 2)
     FCM_SERVER_KEY: str = ""
 
+    # SMS (알리고 API)
+    SMS_API_KEY: str = ""
+    SMS_USER_ID: str = ""
+    SMS_SENDER: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
