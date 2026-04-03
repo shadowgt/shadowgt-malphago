@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import races, horses, jockeys, predictions, sync, synergy, crawl, analysis, notifications
+from app.api.endpoints import races, horses, jockeys, predictions, sync, synergy, crawl, analysis, notifications, ml
 
 api_router = APIRouter()
 api_router.include_router(races.router, prefix="/races", tags=["races"])
@@ -12,3 +12,4 @@ api_router.include_router(sync.router, prefix="/sync", tags=["sync"])
 api_router.include_router(crawl.router, prefix="/crawl", tags=["crawl"])
 api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(ml.router, prefix="/ml", tags=["ml"])

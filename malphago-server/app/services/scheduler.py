@@ -81,6 +81,26 @@ async def job_crawl_gumbit():
         await crawl_gumbit_analysis(rd)
 
 
+async def job_retrain_model():
+    """ML 모델 재학습 (경주결과 수집 후)"""
+    from app.db.session import async_session
+    from app.ml.auto_retrain import retrain_pipeline
+    logger.info("[Scheduler] ML model retrain started")
+    async with async_session() as session:
+        result = await retrain_pipeline(session)
+    logger.info(f"[Scheduler] ML retrain: {result.get('status')}")
+
+
+async def job_weekly_report():
+    """주간 모델 성능 리포트 생성"""
+    from app.db.session import async_session
+    from app.ml.weekly_report import generate_weekly_report
+    logger.info("[Scheduler] Weekly ML report started")
+    async with async_session() as session:
+        report = await generate_weekly_report(session)
+    logger.info(f"[Scheduler] Weekly report: {report.get('total_predictions')} predictions")
+
+
 # ─── Scheduler Setup ───
 
 def setup_scheduler():
@@ -123,6 +143,22 @@ def setup_scheduler():
         job_crawl_gumbit,
         CronTrigger(day_of_week="wed-fri", hour=11, minute=0),
         id="crawl_gumbit",
+        replace_existing=True,
+    )
+
+    # ML 모델 재학습: 금/토/일 20:00 (경주결과 수집 후)
+    scheduler.add_job(
+        job_retrain_model,
+        CronTrigger(day_of_week="fri-sun", hour=20, minute=0),
+        id="retrain_model",
+        replace_existing=True,
+    )
+
+    # 주간 모델 성능 리포트: 매주 월요일 04:00
+    scheduler.add_job(
+        job_weekly_report,
+        CronTrigger(day_of_week="mon", hour=4, minute=0),
+        id="weekly_report",
         replace_existing=True,
     )
 
