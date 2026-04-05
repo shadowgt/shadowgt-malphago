@@ -44,15 +44,12 @@ FEATURE_COLUMNS = [
     "total_entries",
     "distance",
     "favor_ranking",
-    # Factors needing external data (surface/weight/odds)
-    # Uncomment when data.go.kr API data is available:
-    # "surface_aptitude",
-    # "horse_weight_factor",
-    # "odds_win",
-    # "odds_place",
-    # "horse_weight",
-    # "horse_weight_change",
-    # "rating",
+    # Enriched features (from data.go.kr API)
+    "odds_win",
+    "odds_place",
+    "horse_weight",
+    "horse_weight_change",
+    "rating",
 ]
 
 TARGET_COL = "is_top3"

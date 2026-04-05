@@ -45,25 +45,22 @@ async def run(args):
 
     async with async_session() as session:
         if args.date:
-            # 단일 날짜
             target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
             async with session.begin():
                 for meet in meets:
                     stats = await fetch_race_results(session, target_date, meet)
                     print(f"Date={target_date}, Meet={meet}: {stats}")
         else:
-            # 날짜 범위
             start = datetime.strptime(args.start, "%Y-%m-%d").date()
             end = datetime.strptime(args.end, "%Y-%m-%d").date()
             print(f"Collecting: {start} ~ {end}, meets={meets}")
 
-            async with session.begin():
-                stats = await collect_date_range(session, start, end, meets)
-                print(f"\n=== Collection Complete ===")
-                print(f"Dates: {stats['dates']}")
-                print(f"Races: {stats['races']}")
-                print(f"Entries: {stats['entries']}")
-                print(f"Errors: {stats['errors']}")
+            stats = await collect_date_range(session, start, end, meets)
+            print(f"\n=== Collection Complete ===")
+            print(f"Dates: {stats['dates']}")
+            print(f"Races: {stats['races']}")
+            print(f"Entries: {stats['entries']}")
+            print(f"Errors: {stats['errors']}")
 
     await engine.dispose()
 
